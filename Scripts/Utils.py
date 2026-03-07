@@ -54,7 +54,7 @@ def calculate_waittime(limit, type, custom_time):
 def get_initial_data():
     # 默认配置信息
     initial_data = {
-        "checkin_delay": 15,
+        "checkin_delay": 10,
         "poll_interval": 3,
         "sessionid": "",
         "auto_danmu": True,

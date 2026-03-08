@@ -2,5 +2,7 @@ __pycache__
 config.json
 dist
 build
-RainClassroomAssistant.spec
+venv
+*.spec
+*.exe
 build.cmd

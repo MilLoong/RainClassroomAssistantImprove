@@ -28,6 +28,21 @@ def test_network():
     except:
         return False
 
+LLM_PROVIDERS = {
+    "DeepSeek": {
+        "base_url": "https://api.deepseek.com",
+        "model": "deepseek-chat"
+    },
+    "智谱": {
+        "base_url": "https://open.bigmodel.cn/api/paas/v4/",
+        "model": "glm-4-flash"
+    },
+    "Kimi": {
+        "base_url": "https://api.moonshot.cn/v1",
+        "model": "moonshot-v1-8k"
+    }
+}
+
 def calculate_waittime(limit, type, custom_time):
     # 计算答题等待时间
     def default_calculate(limit):
@@ -54,7 +69,7 @@ def calculate_waittime(limit, type, custom_time):
 def get_initial_data():
     # 默认配置信息
     initial_data = {
-        "checkin_delay": 10,
+        "checkin_delay": 15,
         "poll_interval": 3,
         "sessionid": "",
         "auto_danmu": True,
@@ -78,6 +93,7 @@ def get_initial_data():
         "answer_config": {
             "is_random": True,
             "apikey": "",
+            "llm_provider": "DeepSeek",
             "api_test_status": {
                 "tested": False
             },

@@ -153,14 +153,27 @@ class Config_Ui(object):
         self.is_random_answer.setObjectName("is_random_answer")
         self.is_random_answer.setText("随机做答")
         self.verticalLayout_8.addWidget(self.is_random_answer)
+
+        # 模型选择行
+        self.provider_widget = QtWidgets.QWidget(self.when_answer_on)
+        self.horizontalLayout_provider = QtWidgets.QHBoxLayout(self.provider_widget)
+        self.horizontalLayout_provider.setContentsMargins(0, 5, 0, 0)
+        self.label_provider = QtWidgets.QLabel("模型:", self.provider_widget)
+        self.horizontalLayout_provider.addWidget(self.label_provider)
+        self.llm_provider = QtWidgets.QComboBox(self.provider_widget)
+        self.llm_provider.addItems(["DeepSeek", "智谱", "Kimi"])
+        self.llm_provider.setFixedWidth(140)
+        self.horizontalLayout_provider.addWidget(self.llm_provider)
+        self.horizontalLayout_provider.addStretch()
+        self.verticalLayout_8.addWidget(self.provider_widget)
+
         self.llm_widget = QtWidgets.QWidget(self.when_answer_on)
         self.horizontalLayout_llm = QtWidgets.QHBoxLayout(self.llm_widget)
         self.horizontalLayout_llm.setContentsMargins(0, 5, 0, 0)
-        self.label_apikey = QtWidgets.QLabel(self.llm_widget)
-        self.label_apikey.setText("API Key:")
+        self.label_apikey = QtWidgets.QLabel("API Key:", self.llm_widget)
         self.horizontalLayout_llm.addWidget(self.label_apikey)
         self.apikey_input = QtWidgets.QLineEdit(self.llm_widget)
-        self.apikey_input.setPlaceholderText("在此输入 DeepSeek API Key...")
+        self.apikey_input.setPlaceholderText("在此输入 API Key...")
         self.apikey_input.setEchoMode(QtWidgets.QLineEdit.Password)
         self.horizontalLayout_llm.addWidget(self.apikey_input)
         self.test_api_btn = QtWidgets.QPushButton("测试", self.llm_widget)
@@ -252,7 +265,7 @@ class Config_Ui(object):
         self.api_test_result.setText("测试中...")
 
         def _do_test():
-            success, msg = test_llm_api(api_key)
+            success, msg = test_llm_api(api_key, self.llm_provider.currentText())
             from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
             color = "#07c160" if success else "#f00"
             QMetaObject.invokeMethod(
@@ -298,8 +311,10 @@ class Config_Ui(object):
 
     def toggle_llm_config(self):
         if self.is_random_answer.isChecked():
+            self.provider_widget.setEnabled(False)
             self.llm_widget.setEnabled(False)
         else:
+            self.provider_widget.setEnabled(True)
             self.llm_widget.setEnabled(True)
     
     def enable_danmu_config(self):
@@ -349,6 +364,7 @@ class Config_Ui(object):
         self.delay_time_2_input.setValue(config["answer_config"]["answer_delay"]["custom"]["time"])
         ans_cfg = config.get("answer_config", {})
         self.is_random_answer.setChecked(ans_cfg.get("is_random", True))
+        self.llm_provider.setCurrentText(ans_cfg.get("llm_provider", "DeepSeek"))
         self.apikey_input.setText(ans_cfg.get("apikey", ""))
         self.toggle_llm_config()
         self.enable_delay_custom()
@@ -397,6 +413,7 @@ class Config_Ui(object):
             config["answer_config"]["answer_delay"]["type"] = 2
         config["answer_config"]["answer_delay"]["custom"]["time"] = self.delay_time_2_input.value()
         config["answer_config"]["is_random"] = self.is_random_answer.isChecked()
+        config["answer_config"]["llm_provider"] = self.llm_provider.currentText()
         config["answer_config"]["apikey"] = self.apikey_input.text()
         # 监听配置
         config["checkin_delay"] = self.checkin_delay_spinBox.value()

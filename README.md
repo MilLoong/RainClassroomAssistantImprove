@@ -9,10 +9,12 @@
   - **登录界面** 放在 **主窗口** 右边，能更清晰地看到 **登录状态**，**API 测试状态**
 - **接入教程**：
   
-  > 目前我用的是 DeepSeek 的 api
-  - 首先去到：[DeepSeek Platform](platform.deepseek.com)
-  - 然后 **充值余额**：
-    - ![image-20260307235502501](./static/image1.png)
-  - 创建 **API key**
-    - ![image-20260307235547709](./static/image2.png)
-  - 最后在 **配置页面** 填上即可
+  > 目前支持：**DeepSeek, Kimi, 智谱的 glm-4-flash**
+  - 这里以 DeepSeek 的 api 为例:
+    - 首先去到：[DeepSeek Platform](platform.deepseek.com)
+    - 然后 **充值余额**：
+      - ![image-20260307235502501](./static/image1.png)
+    - 创建 **API key**
+      - ![image-20260307235547709](./static/image2.png)
+    - 最后在 **配置页面** 填上即可
+  - 其他 api 也是同理去到 官网 处理

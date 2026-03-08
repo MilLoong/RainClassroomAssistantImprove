@@ -351,6 +351,7 @@ class Config_Ui(object):
         self.is_random_answer.setChecked(ans_cfg.get("is_random", True))
         self.apikey_input.setText(ans_cfg.get("apikey", ""))
         self.toggle_llm_config()
+        self.enable_delay_custom()
         # 加载上次测试结果
         test_status = ans_cfg.get("api_test_status", {})
         if test_status.get("tested"):

@@ -45,7 +45,7 @@ def calculate_waittime(limit, type, custom_time):
         wait_time = default_calculate(limit)
     elif type == 2:
         # 如果自定义等待时间超过当前题目的剩余时间，则采用默认算法
-        if custom_time > limit:
+        if limit != -1 and custom_time > limit:
             wait_time = default_calculate(limit)
         else:
             wait_time = custom_time

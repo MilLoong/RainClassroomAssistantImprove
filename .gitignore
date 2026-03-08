@@ -1,8 +1,8 @@
 __pycache__
-config.json
 dist
 build
 venv
+*.json
 *.spec
 *.exe
 build.cmd

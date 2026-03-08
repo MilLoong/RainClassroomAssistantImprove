@@ -543,7 +543,9 @@ class MainWindow_Ui(QtCore.QObject):
         if dialog.exec_():
             config_route = get_config_path()
             with open(config_route, "r") as f:
-                self.config = json.load(f)
+                new_config = json.load(f)
+            self.config.clear()
+            self.config.update(new_config)
             self.refresh_answer_mode()
 
     def show_login(self):

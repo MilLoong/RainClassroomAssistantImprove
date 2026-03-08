@@ -319,7 +319,7 @@ class Lesson:
                 display_text = (
                     f"课程: {self.lessonname}\n"
                     f"限时: {time_str}\n"
-                    f"题目: {clean_body}\n\n"
+                    f"题目: {clean_body}\n"
                     f"选项: \n{box_options}"
                 )
                 self.main_ui.update_problem_signal.emit(display_text)

@@ -5,16 +5,46 @@ import time
 import re
 import websocket
 import json
+import os
 from openai import OpenAI
-from Scripts.Utils import get_user_info, dict_result, calculate_waittime, say_something, get_config_dir, LLM_PROVIDERS
+from Scripts.Utils import (
+    get_user_info,
+    dict_result,
+    calculate_waittime,
+    say_something,
+    get_config_dir,
+    get_provider_config,
+    DEFAULT_LLM_PROVIDER,
+)
 
 wss_url = "wss://www.yuketang.cn/wsapp/"
+
+def build_llm_request_kwargs(provider, model):
+    request_kwargs = {}
+    normalized_model = (model or "").strip().lower()
+
+    if provider in {"OpenAI", "Gemini"}:
+        request_kwargs["reasoning_effort"] = "high"
+
+    if provider == "OpenRouter" and "gpt-5" in normalized_model:
+        request_kwargs["extra_body"] = {"reasoning": {"effort": "high"}}
+
+    if provider == "智谱":
+        request_kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+
+    if provider == "通义千问" and "thinking" not in normalized_model:
+        request_kwargs["extra_body"] = {"enable_thinking": True}
+
+    if provider == "Kimi" and "thinking" not in normalized_model:
+        request_kwargs["extra_body"] = {"enable_thinking": True}
+
+    return request_kwargs
 
 def test_llm_api(api_key, provider="DeepSeek"):
     # 测试 LLM API Key 是否可用。
     if not api_key or len(api_key.strip()) < 10:
         return False, "API Key 格式不正确"
-    cfg = LLM_PROVIDERS.get(provider, LLM_PROVIDERS["DeepSeek"])
+    cfg = get_provider_config(provider)
     try:
         client = OpenAI(
             api_key=api_key.strip(),
@@ -23,7 +53,31 @@ def test_llm_api(api_key, provider="DeepSeek"):
         response = client.chat.completions.create(
             model=cfg["model"],
             messages=[{"role": "user", "content": "回复数字1"}],
-            max_tokens=5
+            max_tokens=5,
+            **build_llm_request_kwargs(provider, cfg["model"])
+        )
+        reply = response.choices[0].message.content.strip()
+        return True, f"连接成功，模型回复：{reply}"
+    except Exception as e:
+        return False, f"连接失败：{str(e)}"
+
+def test_llm_api_with_config(api_key, provider, model=None, base_url=None):
+    if not api_key or len(api_key.strip()) < 10:
+        return False, "API Key 格式不正确"
+    provider_cfg = get_provider_config(provider)
+    model = (model or provider_cfg.get("model", "")).strip()
+    base_url = (base_url or provider_cfg.get("base_url", "")).strip()
+    if not model:
+        return False, "请先填写模型名称"
+    if not base_url:
+        return False, "请先填写 Base URL"
+    try:
+        client = OpenAI(api_key=api_key.strip(), base_url=base_url)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": "回复数字1"}],
+            max_tokens=5,
+            **build_llm_request_kwargs(provider, model)
         )
         reply = response.choices[0].message.content.strip()
         return True, f"连接成功，模型回复：{reply}"
@@ -80,27 +134,31 @@ class Lesson:
     def _call_llm(self, quiz_dump):
         # 调用 LLM API 获取答案。
         api_key = self.config.get("answer_config", {}).get("apikey", "").strip()
-        provider = self.config.get("answer_config", {}).get("llm_provider", "DeepSeek")
-        cfg = LLM_PROVIDERS.get(provider, LLM_PROVIDERS["DeepSeek"])
+        answer_cfg = self.config.get("answer_config", {})
+        provider = answer_cfg.get("llm_provider", DEFAULT_LLM_PROVIDER)
+        provider_cfg = get_provider_config(provider)
+        model = answer_cfg.get("llm_model", provider_cfg.get("model", "")).strip()
+        base_url = answer_cfg.get("llm_base_url", provider_cfg.get("base_url", "")).strip()
         p_type = str(quiz_dump.get("type", ""))
         type_str = "单选题" if p_type == "1" else "多选题"
         prompt = (
             f"你是一个答题助手。请根据题目和选项，选出正确答案。\n"
             f"题型：{type_str}\n"
             f"题目：{quiz_dump['question']}\n"
-            f"选项：\n" + "\n".join(quiz_dump['options']) + "\n\n"
-            f"要求：只返回选项字母，单选返回一个字母如 A，多选返回多个字母用英文逗号分隔如 A,C，不要有任何其他内容。"
+            + "选项：\n" + "\n".join(quiz_dump["options"]) + "\n\n"
+            + "要求：只返回选项字母，单选返回一个字母如 A，多选返回多个字母用英文逗号分隔如 A,C，不要有任何其他内容。"
         )
         try:
             client = OpenAI(
                 api_key=api_key,
-                base_url=cfg["base_url"]
+                base_url=base_url
             )
             response = client.chat.completions.create(
-                model=cfg["model"],
+                model=model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=20,
-                temperature=0.0
+                temperature=0.0,
+                **build_llm_request_kwargs(provider, model)
             )
             raw = response.choices[0].message.content.strip().upper()
             answers = [c for c in raw if c.isalpha()]
@@ -306,7 +364,7 @@ class Lesson:
                     }
                 }
                 try:
-                    quiz_dump_dir = get_config_dir() + "\\quiz_dump.json"
+                    quiz_dump_dir = os.path.join(get_config_dir(), "quiz_dump.json")
                     with open(quiz_dump_dir, "a", encoding="utf-8") as f:
                         f.write(json.dumps(quiz_dump, ensure_ascii=False) + "\n")
                 except Exception as e:

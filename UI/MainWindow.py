@@ -2,7 +2,19 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from UI.Config import Config_Ui
-from Scripts.Utils import *
+from Scripts.Utils import (
+    DEFAULT_LLM_PROVIDER,
+    dict_result,
+    get_config_dir,
+    get_config_path,
+    get_initial_data,
+    get_user_info,
+    get_title_font_family,
+    get_ui_font_family,
+    normalize_config,
+    resource_path,
+    say_something,
+)
 from Scripts.Monitor import monitor
 import os
 import json
@@ -23,6 +35,8 @@ class MainWindow_Ui(QtCore.QObject):
     _user_panel_signal    = QtCore.pyqtSignal(str, str, str, QtGui.QPixmap)
 
     def setupUi(self, MainWindow):
+        ui_font_family = get_ui_font_family()
+        title_font_family = get_title_font_family()
         self.table_index = []
         self.is_active   = False
 
@@ -60,7 +74,7 @@ class MainWindow_Ui(QtCore.QObject):
         menuLayout.addWidget(icon_lbl)
 
         title_lbl = QtWidgets.QLabel("摸鱼课堂", self.Menu)
-        title_lbl.setStyleSheet("color: #fff; font: 16pt '黑体';")
+        title_lbl.setStyleSheet(f"color: #fff; font: 16pt '{title_font_family}';")
         menuLayout.addWidget(title_lbl)
 
         menuLayout.addStretch()
@@ -94,10 +108,10 @@ class MainWindow_Ui(QtCore.QObject):
 
         # 监听列表
         self.Table = QtWidgets.QGroupBox("监听列表", leftWidget)
-        self.Table.setStyleSheet("font: 10pt '微软雅黑'; color: rgb(0,0,0);")
+        self.Table.setStyleSheet(f"font: 10pt '{ui_font_family}'; color: rgb(0,0,0);")
         tableBoxLayout = QtWidgets.QVBoxLayout(self.Table)
         self.tableWidget = QtWidgets.QTableWidget(self.Table)
-        self.tableWidget.setStyleSheet("font: 9pt '微软雅黑';")
+        self.tableWidget.setStyleSheet(f"font: 9pt '{ui_font_family}';")
         self.tableWidget.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.tableWidget.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.tableWidget.setColumnCount(4)
@@ -113,11 +127,11 @@ class MainWindow_Ui(QtCore.QObject):
 
         # 信息框
         self.Output = QtWidgets.QGroupBox("信息", leftWidget)
-        self.Output.setStyleSheet("font: 10pt '微软雅黑'; color: rgb(0,0,0);")
+        self.Output.setStyleSheet(f"font: 10pt '{ui_font_family}'; color: rgb(0,0,0);")
         outputBoxLayout = QtWidgets.QVBoxLayout(self.Output)
         self.output_textarea = QtWidgets.QTextBrowser(self.Output)
         self.output_textarea.setStyleSheet(
-            "background-color: rgb(100,100,100); color: #fff; font: 9pt '微软雅黑';"
+            f"background-color: rgb(100,100,100); color: #fff; font: 9pt '{ui_font_family}';"
         )
         self.output_textarea.setMinimumHeight(80)
         outputBoxLayout.addWidget(self.output_textarea)
@@ -125,11 +139,11 @@ class MainWindow_Ui(QtCore.QObject):
 
         # 题目框
         self.ProblemBox = QtWidgets.QGroupBox("当前题目", leftWidget)
-        self.ProblemBox.setStyleSheet("font: 10pt '微软雅黑'; color: rgb(0,0,0);")
+        self.ProblemBox.setStyleSheet(f"font: 10pt '{ui_font_family}'; color: rgb(0,0,0);")
         problemBoxLayout = QtWidgets.QVBoxLayout(self.ProblemBox)
         self.problem_textarea = QtWidgets.QTextBrowser(self.ProblemBox)
         self.problem_textarea.setStyleSheet(
-            "background-color: rgb(245,245,245); color: #000; font: 10pt '微软雅黑';"
+            f"background-color: rgb(245,245,245); color: #000; font: 10pt '{ui_font_family}';"
         )
         self.problem_textarea.setMinimumHeight(80)
         self.problem_textarea.setText("当前没有题目")
@@ -166,7 +180,7 @@ class MainWindow_Ui(QtCore.QObject):
             self.rightPanel
         )
         self.qrHint.setAlignment(QtCore.Qt.AlignCenter)
-        self.qrHint.setStyleSheet("font: 9pt '微软雅黑'; color: #888;")
+        self.qrHint.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #888;")
         rightLayout.addWidget(self.qrHint)
 
         # 状态徽标
@@ -189,7 +203,7 @@ class MainWindow_Ui(QtCore.QObject):
         self.nameLabel = QtWidgets.QLabel("—", self.rightPanel)
         self.nameLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.nameLabel.setWordWrap(True)
-        self.nameLabel.setStyleSheet("font: bold 13pt '微软雅黑'; color: #222;")
+        self.nameLabel.setStyleSheet(f"font: bold 13pt '{ui_font_family}'; color: #222;")
         rightLayout.addWidget(self.nameLabel)
 
         # 学校
@@ -197,10 +211,10 @@ class MainWindow_Ui(QtCore.QObject):
         schoolRowL = QtWidgets.QHBoxLayout(schoolRow)
         schoolRowL.setContentsMargins(0, 0, 0, 0)
         schoolKey = QtWidgets.QLabel("学校", schoolRow)
-        schoolKey.setStyleSheet("font: 9pt '微软雅黑'; color: #999;")
+        schoolKey.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #999;")
         schoolKey.setFixedWidth(36)
         self.schoolVal = QtWidgets.QLabel("—", schoolRow)
-        self.schoolVal.setStyleSheet("font: 9pt '微软雅黑'; color: #444;")
+        self.schoolVal.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #444;")
         self.schoolVal.setWordWrap(True)
         schoolRowL.addWidget(schoolKey)
         schoolRowL.addWidget(self.schoolVal)
@@ -211,10 +225,10 @@ class MainWindow_Ui(QtCore.QObject):
         snoRowL = QtWidgets.QHBoxLayout(snoRow)
         snoRowL.setContentsMargins(0, 0, 0, 0)
         snoKey = QtWidgets.QLabel("学号", snoRow)
-        snoKey.setStyleSheet("font: 9pt '微软雅黑'; color: #999;")
+        snoKey.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #999;")
         snoKey.setFixedWidth(36)
         self.snoVal = QtWidgets.QLabel("—", snoRow)
-        self.snoVal.setStyleSheet("font: 9pt '微软雅黑'; color: #444;")
+        self.snoVal.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #444;")
         self.snoVal.setWordWrap(True)
         snoRowL.addWidget(snoKey)
         snoRowL.addWidget(self.snoVal)
@@ -230,13 +244,13 @@ class MainWindow_Ui(QtCore.QObject):
 
         # 答题状态
         self.answer_mode_label = QtWidgets.QLabel("当前答题状态：—", self.rightPanel)
-        self.answer_mode_label.setStyleSheet("font: 9pt '微软雅黑'; color: #555;")
+        self.answer_mode_label.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #555;")
         self.answer_mode_label.setWordWrap(True)
         rightLayout.addWidget(self.answer_mode_label)
 
         # API 测试状态
         self.api_status_label = QtWidgets.QLabel("", self.rightPanel)
-        self.api_status_label.setStyleSheet("font: 8pt '微软雅黑'; color: #888;")
+        self.api_status_label.setStyleSheet(f"font: 8pt '{ui_font_family}'; color: #888;")
         self.api_status_label.setWordWrap(True)
         self.api_status_label.setVisible(False)
         rightLayout.addWidget(self.api_status_label)
@@ -248,7 +262,7 @@ class MainWindow_Ui(QtCore.QObject):
         self.relogin_btn.setStyleSheet(
             "QPushButton {"
             "  background: #fff; border: 1px solid #d0d0d0;"
-            "  border-radius: 6px; font: 9pt '微软雅黑'; color: #555;"
+            f"  border-radius: 6px; font: 9pt '{ui_font_family}'; color: #555;"
             "}"
             "QPushButton:hover { background: #f0f0f0; }"
         )
@@ -293,16 +307,16 @@ class MainWindow_Ui(QtCore.QObject):
 
     # 右侧面板：状态徽标辅助
     def _badge_waiting(self):
-        self.statusBadge.setText("⏳ 等待扫码")
+        self.statusBadge.setText("等待扫码")
         self.statusBadge.setStyleSheet(
-            "font: 9pt '微软雅黑'; color: #888;"
+            f"font: 9pt '{get_ui_font_family()}'; color: #888;"
             "background: #efefef; border-radius: 11px; padding: 0 10px;"
         )
 
     def _badge_success(self):
-        self.statusBadge.setText("✅ 已登录")
+        self.statusBadge.setText("已登录 √")
         self.statusBadge.setStyleSheet(
-            "font: 9pt '微软雅黑'; color: #07c160;"
+            f"font: 9pt '{get_ui_font_family()}'; color: #07c160;"
             "background: #edfbf3; border-radius: 11px; padding: 0 10px;"
         )
 
@@ -328,7 +342,6 @@ class MainWindow_Ui(QtCore.QObject):
             pass
 
         def on_message(wsapp, message):
-            from Scripts.Utils import dict_result
             data = dict_result(message)
             op = data.get("op")
 
@@ -466,7 +479,7 @@ class MainWindow_Ui(QtCore.QObject):
             )
 
         self.qrHint.setText("登录成功")
-        self.qrHint.setStyleSheet("font: 9pt '微软雅黑'; color: #07c160;")
+        self.qrHint.setStyleSheet(f"font: 9pt '{get_ui_font_family()}'; color: #07c160;")
         self._badge_success()
         self.nameLabel.setText(name)
         self.schoolVal.setText(school)
@@ -502,18 +515,21 @@ class MainWindow_Ui(QtCore.QObject):
         auto_answer = self.config.get("auto_answer", False)
         if not auto_answer:
             self.answer_mode_label.setText("当前答题状态：已关闭")
-            self.answer_mode_label.setStyleSheet("font: 9pt '微软雅黑'; color: #aaa;")
+            self.answer_mode_label.setStyleSheet(f"font: 9pt '{get_ui_font_family()}'; color: #aaa;")
             self.api_status_label.setVisible(False)
             return
 
         is_random = self.config.get("answer_config", {}).get("is_random", True)
         if is_random:
             self.answer_mode_label.setText("当前答题状态：随机做答")
-            self.answer_mode_label.setStyleSheet("font: 9pt '微软雅黑'; color: #555;")
+            self.answer_mode_label.setStyleSheet(f"font: 9pt '{get_ui_font_family()}'; color: #555;")
             self.api_status_label.setVisible(False)
         else:
-            self.answer_mode_label.setText("当前答题状态：LLM 做答")
-            self.answer_mode_label.setStyleSheet("font: 9pt '微软雅黑'; color: #1677ff;")
+            provider = self.config.get("answer_config", {}).get("llm_provider", DEFAULT_LLM_PROVIDER)
+            model = self.config.get("answer_config", {}).get("llm_model", "")
+            provider_desc = provider if not model else f"{provider} / {model}"
+            self.answer_mode_label.setText(f"当前答题状态：LLM 做答\n{provider_desc}")
+            self.answer_mode_label.setStyleSheet(f"font: 9pt '{get_ui_font_family()}'; color: #1677ff;")
             # 读取上次测试结果，不发请求
             test_status = self.config.get("answer_config", {}).get("api_test_status", {})
             if test_status.get("tested"):
@@ -522,15 +538,15 @@ class MainWindow_Ui(QtCore.QObject):
                 color = "#07c160" if success else "#f00"
                 prefix = "API 正常：" if success else "API 异常："
                 self.api_status_label.setText(prefix + msg)
-                self.api_status_label.setStyleSheet(f"font: 8pt '微软雅黑'; color: {color};")
+                self.api_status_label.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: {color};")
             else:
                 api_key = self.config.get("answer_config", {}).get("apikey", "").strip()
                 if api_key:
                     self.api_status_label.setText("API Key 已填写，请在配置页点击测试")
-                    self.api_status_label.setStyleSheet("font: 8pt '微软雅黑'; color: #fa8c16;")
+                    self.api_status_label.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: #fa8c16;")
                 else:
                     self.api_status_label.setText("未填写 API Key")
-                    self.api_status_label.setStyleSheet("font: 8pt '微软雅黑'; color: #f00;")
+                    self.api_status_label.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: #f00;")
             self.api_status_label.setVisible(True)
 
     def show_config(self):
@@ -555,7 +571,7 @@ class MainWindow_Ui(QtCore.QObject):
             "border: 1px solid #e0e0e0; border-radius: 8px; background: #fafafa;"
         )
         self.qrHint.setText("微信扫码登录")
-        self.qrHint.setStyleSheet("font: 9pt '微软雅黑'; color: #888;")
+        self.qrHint.setStyleSheet(f"font: 9pt '{get_ui_font_family()}'; color: #888;")
         self._badge_waiting()
         self.nameLabel.setText("—")
         self.schoolVal.setText("—")
@@ -574,7 +590,12 @@ class MainWindow_Ui(QtCore.QObject):
             try:
                 with open(config_route, "r") as f:
                     data = json.load(f)
-                return data, "配置文件已读取"
+                normalized = normalize_config(data)
+                if normalized != data:
+                    with open(config_route, "w+") as f:
+                        json.dump(normalized, f)
+                    return normalized, "配置文件已读取，并已自动补全 LLM 配置"
+                return normalized, "配置文件已读取"
             except Exception:
                 with open(config_route, "w+") as f:
                     initial_data = get_initial_data()

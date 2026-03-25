@@ -1,18 +1,26 @@
 # -*- coding: utf-8 -*-
 
 from PyQt5 import QtCore, QtWidgets, QtGui
-from Scripts.Utils import get_config_path, resource_path
-from Scripts.Classes import test_llm_api
+from Scripts.Utils import (
+    get_config_path,
+    resource_path,
+    get_provider_names,
+    get_provider_config,
+    get_ui_font_family,
+    DEFAULT_LLM_PROVIDER,
+)
+from Scripts.Classes import test_llm_api_with_config
 import json
 import functools
 import threading
 
 class Config_Ui(object):
     def setupUi(self, Dialog):
+        ui_font_family = get_ui_font_family()
         Dialog.setObjectName("Dialog")
         Dialog.resize(430, 550)
         Dialog.setStyleSheet("background-color: rgb(255, 255, 255);\n"
-"font: 9pt \"微软雅黑\";")
+f"font: 9pt \"{ui_font_family}\";")
         Dialog.setWindowIcon(QtGui.QIcon(resource_path("UI\\Image\\favicon.ico")))
         self.verticalLayout = QtWidgets.QVBoxLayout(Dialog)
         self.verticalLayout.setObjectName("verticalLayout")
@@ -161,8 +169,8 @@ class Config_Ui(object):
         self.label_provider = QtWidgets.QLabel("模型:", self.provider_widget)
         self.horizontalLayout_provider.addWidget(self.label_provider)
         self.llm_provider = QtWidgets.QComboBox(self.provider_widget)
-        self.llm_provider.addItems(["DeepSeek", "智谱", "Kimi"])
-        self.llm_provider.setFixedWidth(140)
+        self.llm_provider.addItems(get_provider_names())
+        self.llm_provider.setFixedWidth(180)
         self.horizontalLayout_provider.addWidget(self.llm_provider)
         self.horizontalLayout_provider.addStretch()
         self.verticalLayout_8.addWidget(self.provider_widget)
@@ -180,7 +188,7 @@ class Config_Ui(object):
         self.test_api_btn.setFixedWidth(48)
         self.test_api_btn.setFixedHeight(24)
         self.test_api_btn.setStyleSheet(
-            "QPushButton { background: #1677ff; color: #fff; border-radius: 4px; font: 8pt '微软雅黑'; }"
+            f"QPushButton {{ background: #1677ff; color: #fff; border-radius: 4px; font: 8pt '{ui_font_family}'; }}"
             "QPushButton:hover { background: #4096ff; }"
             "QPushButton:disabled { background: #aaa; }"
         )
@@ -188,10 +196,30 @@ class Config_Ui(object):
         self.horizontalLayout_llm.addWidget(self.test_api_btn)
         self.verticalLayout_8.addWidget(self.llm_widget)
 
+        self.model_widget = QtWidgets.QWidget(self.when_answer_on)
+        self.horizontalLayout_model = QtWidgets.QHBoxLayout(self.model_widget)
+        self.horizontalLayout_model.setContentsMargins(0, 5, 0, 0)
+        self.label_model = QtWidgets.QLabel("模型名:", self.model_widget)
+        self.horizontalLayout_model.addWidget(self.label_model)
+        self.llm_model_input = QtWidgets.QLineEdit(self.model_widget)
+        self.llm_model_input.setPlaceholderText("例如：gpt-4o-mini / deepseek-chat")
+        self.horizontalLayout_model.addWidget(self.llm_model_input)
+        self.verticalLayout_8.addWidget(self.model_widget)
+
+        self.base_url_widget = QtWidgets.QWidget(self.when_answer_on)
+        self.horizontalLayout_base_url = QtWidgets.QHBoxLayout(self.base_url_widget)
+        self.horizontalLayout_base_url.setContentsMargins(0, 5, 0, 0)
+        self.label_base_url = QtWidgets.QLabel("Base URL:", self.base_url_widget)
+        self.horizontalLayout_base_url.addWidget(self.label_base_url)
+        self.llm_base_url_input = QtWidgets.QLineEdit(self.base_url_widget)
+        self.llm_base_url_input.setPlaceholderText("例如：https://api.openai.com/v1")
+        self.horizontalLayout_base_url.addWidget(self.llm_base_url_input)
+        self.verticalLayout_8.addWidget(self.base_url_widget)
+
         # 测试结果提示行
         self.api_test_result = QtWidgets.QLabel("", self.when_answer_on)
         self.api_test_result.setWordWrap(True)
-        self.api_test_result.setStyleSheet("font: 8pt '微软雅黑'; color: #888;")
+        self.api_test_result.setStyleSheet(f"font: 8pt '{ui_font_family}'; color: #888;")
         self.verticalLayout_8.addWidget(self.api_test_result)
         self.verticalLayout_5.addWidget(self.when_answer_on)
         self.verticalLayout_12.addWidget(self.answer_config)
@@ -249,6 +277,7 @@ class Config_Ui(object):
         self.is_random_answer.stateChanged.connect(self.toggle_llm_config)
         self.delay_time_radio_1.clicked.connect(self.enable_delay_custom)
         self.delay_time_radio_2.clicked.connect(self.enable_delay_custom)
+        self.llm_provider.currentTextChanged.connect(self.on_provider_changed)
         self.save.clicked.connect(functools.partial(self.save_config,dialog=Dialog))
 
         self.retranslateUi(Dialog)
@@ -256,16 +285,31 @@ class Config_Ui(object):
 
     def test_api(self):
         api_key = self.apikey_input.text().strip()
+        model = self.llm_model_input.text().strip()
+        base_url = self.llm_base_url_input.text().strip()
         if not api_key:
-            self.api_test_result.setStyleSheet("font: 8pt '微软雅黑'; color: #f00;")
+            self.api_test_result.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: #f00;")
             self.api_test_result.setText("请先输入 API Key")
             return
+        if not model:
+            self.api_test_result.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: #f00;")
+            self.api_test_result.setText("请先输入模型名称")
+            return
+        if not base_url:
+            self.api_test_result.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: #f00;")
+            self.api_test_result.setText("请先输入 Base URL")
+            return
         self.test_api_btn.setEnabled(False)
-        self.api_test_result.setStyleSheet("font: 8pt '微软雅黑'; color: #888;")
+        self.api_test_result.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: #888;")
         self.api_test_result.setText("测试中...")
 
         def _do_test():
-            success, msg = test_llm_api(api_key, self.llm_provider.currentText())
+            success, msg = test_llm_api_with_config(
+                api_key,
+                self.llm_provider.currentText(),
+                model,
+                base_url
+            )
             from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
             color = "#07c160" if success else "#f00"
             QMetaObject.invokeMethod(
@@ -275,7 +319,7 @@ class Config_Ui(object):
             QMetaObject.invokeMethod(
                 self.api_test_result, "setStyleSheet",
                 Qt.QueuedConnection,
-                Q_ARG(str, f"font: 8pt '微软雅黑'; color: {color};")
+                Q_ARG(str, f"font: 8pt '{get_ui_font_family()}'; color: {color};")
             )
             QMetaObject.invokeMethod(
                 self.test_api_btn, "setEnabled",
@@ -286,7 +330,10 @@ class Config_Ui(object):
                 "tested": True,
                 "success": success,
                 "msg": msg,
-                "tested_key": api_key
+                "tested_key": api_key,
+                "tested_provider": self.llm_provider.currentText(),
+                "tested_model": model,
+                "tested_base_url": base_url
             }
             self.dialog_config["answer_config"]["api_test_status"] = test_status
             config_path = get_config_path()
@@ -302,20 +349,47 @@ class Config_Ui(object):
         threading.Thread(target=_do_test, daemon=True).start()
 
     def _on_apikey_changed(self, text):
-        # API Key 输入内容变化时，若与上次测试的 key 不同则清空测试状态。
+        # 模型相关配置变化时，若与上次测试参数不同则清空测试状态。
+        if not hasattr(self, "dialog_config"):
+            return
         status = self.dialog_config.get("answer_config", {}).get("api_test_status", {})
         if status.get("tested") and status.get("tested_key", "") != text.strip():
             self.dialog_config["answer_config"]["api_test_status"] = {"tested": False}
             self.api_test_result.setText("API Key 已修改，请重新测试")
-            self.api_test_result.setStyleSheet("font: 8pt '微软雅黑'; color: #fa8c16;")
+            self.api_test_result.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: #fa8c16;")
+
+    def _on_llm_setting_changed(self):
+        if not hasattr(self, "dialog_config"):
+            return
+        status = self.dialog_config.get("answer_config", {}).get("api_test_status", {})
+        if not status.get("tested"):
+            return
+        if (
+            status.get("tested_provider", "") != self.llm_provider.currentText() or
+            status.get("tested_model", "") != self.llm_model_input.text().strip() or
+            status.get("tested_base_url", "") != self.llm_base_url_input.text().strip()
+        ):
+            self.dialog_config["answer_config"]["api_test_status"] = {"tested": False}
+            self.api_test_result.setText("模型配置已修改，请重新测试")
+            self.api_test_result.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: #fa8c16;")
+
+    def on_provider_changed(self, provider):
+        provider_cfg = get_provider_config(provider)
+        self.llm_model_input.setText(provider_cfg.get("model", ""))
+        self.llm_base_url_input.setText(provider_cfg.get("base_url", ""))
+        self._on_llm_setting_changed()
 
     def toggle_llm_config(self):
         if self.is_random_answer.isChecked():
             self.provider_widget.setEnabled(False)
             self.llm_widget.setEnabled(False)
+            self.model_widget.setEnabled(False)
+            self.base_url_widget.setEnabled(False)
         else:
             self.provider_widget.setEnabled(True)
             self.llm_widget.setEnabled(True)
+            self.model_widget.setEnabled(True)
+            self.base_url_widget.setEnabled(True)
     
     def enable_danmu_config(self):
         if self.danmu_on.isChecked():
@@ -364,8 +438,10 @@ class Config_Ui(object):
         self.delay_time_2_input.setValue(config["answer_config"]["answer_delay"]["custom"]["time"])
         ans_cfg = config.get("answer_config", {})
         self.is_random_answer.setChecked(ans_cfg.get("is_random", True))
-        self.llm_provider.setCurrentText(ans_cfg.get("llm_provider", "DeepSeek"))
+        self.llm_provider.setCurrentText(ans_cfg.get("llm_provider", DEFAULT_LLM_PROVIDER))
         self.apikey_input.setText(ans_cfg.get("apikey", ""))
+        self.llm_model_input.setText(ans_cfg.get("llm_model", get_provider_config(self.llm_provider.currentText()).get("model", "")))
+        self.llm_base_url_input.setText(ans_cfg.get("llm_base_url", get_provider_config(self.llm_provider.currentText()).get("base_url", "")))
         self.toggle_llm_config()
         self.enable_delay_custom()
         # 加载上次测试结果
@@ -375,16 +451,22 @@ class Config_Ui(object):
             msg = test_status.get("msg", "")
             color = "#07c160" if success else "#f00"
             self.api_test_result.setText(msg)
-            self.api_test_result.setStyleSheet(f"font: 8pt '微软雅黑'; color: {color};")
+            self.api_test_result.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: {color};")
         else:
             self.api_test_result.setText("未测试")
-            self.api_test_result.setStyleSheet("font: 8pt '微软雅黑'; color: #aaa;")
+            self.api_test_result.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: #aaa;")
         # 绑定 Key 变化监听（先断开防止重复绑定）
         try:
             self.apikey_input.textChanged.disconnect()
         except Exception:
             pass
         self.apikey_input.textChanged.connect(self._on_apikey_changed)
+        for widget in [self.llm_model_input, self.llm_base_url_input]:
+            try:
+                widget.textChanged.disconnect()
+            except Exception:
+                pass
+            widget.textChanged.connect(self._on_llm_setting_changed)
         # 监听配置
         self.checkin_delay_spinBox.setValue(config.get("checkin_delay", 0))
         self.poll_interval_spinBox.setValue(config.get("poll_interval", 30))
@@ -415,6 +497,8 @@ class Config_Ui(object):
         config["answer_config"]["is_random"] = self.is_random_answer.isChecked()
         config["answer_config"]["llm_provider"] = self.llm_provider.currentText()
         config["answer_config"]["apikey"] = self.apikey_input.text()
+        config["answer_config"]["llm_model"] = self.llm_model_input.text().strip()
+        config["answer_config"]["llm_base_url"] = self.llm_base_url_input.text().strip()
         # 监听配置
         config["checkin_delay"] = self.checkin_delay_spinBox.value()
         config["poll_interval"] = self.poll_interval_spinBox.value()
@@ -450,6 +534,9 @@ class Config_Ui(object):
         self.answer_config.setTitle(_translate("Dialog", "答题配置"))
         self.answer_on.setText(_translate("Dialog", "启用自动答题"))
         self.label_3.setText(_translate("Dialog", "答题延迟时长"))
+        self.label_provider.setText(_translate("Dialog", "供应商:"))
+        self.label_model.setText(_translate("Dialog", "模型名:"))
+        self.label_base_url.setText(_translate("Dialog", "Base URL:"))
         self.save.setText(_translate("Dialog", "保存"))
         self.cancel.setText(_translate("Dialog", "取消"))
         self.poll_config.setTitle(_translate("Dialog", "监听配置"))

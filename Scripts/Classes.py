@@ -82,6 +82,7 @@ class Lesson:
         api_key = self.config.get("answer_config", {}).get("apikey", "").strip()
         provider = self.config.get("answer_config", {}).get("llm_provider", "DeepSeek")
         cfg = LLM_PROVIDERS.get(provider, LLM_PROVIDERS["DeepSeek"])
+        is_reasoner = cfg["model"] == "deepseek-reasoner"
         p_type = str(quiz_dump.get("type", ""))
         type_str = "单选题" if p_type == "1" else "多选题"
         prompt = (
@@ -96,12 +97,16 @@ class Lesson:
                 api_key=api_key,
                 base_url=cfg["base_url"]
             )
-            response = client.chat.completions.create(
-                model=cfg["model"],
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=20,
-                temperature=0.0
-            )
+            # R1 不支持 temperature=0.0，且 max_tokens 要大一些
+            kwargs = {
+                "model": cfg["model"],
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 500 if is_reasoner else 20,
+            }
+            if not is_reasoner:
+                kwargs["temperature"] = 0.0
+            response = client.chat.completions.create(**kwargs)
+            # R1 答案在 content 里，reasoning_content 是推理过程，忽略掉
             raw = response.choices[0].message.content.strip().upper()
             answers = [c for c in raw if c.isalpha()]
             if p_type == "1" and len(answers) > 1:
@@ -161,7 +166,13 @@ class Lesson:
         r = requests.post(
             url="https://www.yuketang.cn/api/v3/lesson/checkin",
             headers=self.headers,
-            data=json.dumps({"source": 5, "lessonId": self.lessonid}),
+            data=json.dumps(
+                {
+                    "source": 21, 
+                    "lessonId": self.lessonid,
+                    "joinIfNotIn": True
+                }
+            ),
             proxies={"http": None, "https": None}
         )
         try:
@@ -172,6 +183,9 @@ class Lesson:
         if res_json.get("code") != 0:
             msg = res_json.get('msg', '未知错误')
             if msg == 'LESSON_END':
+                return None
+            elif 'DYNAMIC_QR_CHECK_IN_REFUSED' in msg:
+                self.add_message("%s为动态二维码签到，请手动签到" % (self.lessonname), 7)
                 return None
             else:
                 self.add_message("%s签到失败，原因：%s" % (self.lessonname, msg), 7)

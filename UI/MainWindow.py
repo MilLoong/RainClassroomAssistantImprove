@@ -219,8 +219,36 @@ class MainWindow_Ui(QtCore.QObject):
         snoRowL.addWidget(snoKey)
         snoRowL.addWidget(self.snoVal)
         rightLayout.addWidget(snoRow)
-
         rightLayout.addStretch()
+
+        # sessionid 显示行
+        sidRow = QtWidgets.QWidget(self.rightPanel)
+        sidRowL = QtWidgets.QHBoxLayout(sidRow)
+        sidRowL.setContentsMargins(0, 0, 0, 0)
+        sidKey = QtWidgets.QLabel("ID", sidRow)
+        sidKey.setStyleSheet("font: 9pt '微软雅黑'; color: #999;")
+        sidKey.setFixedWidth(36)
+        self.sidVal = QtWidgets.QLabel("—", sidRow)
+        self.sidVal.setStyleSheet("font: 9pt '微软雅黑'; color: #444;")
+        self.sidVal.setMaximumWidth(120)
+        # 文字超出显示省略号，鼠标悬停显示完整 sessionid
+        self.sidVal.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        # 复制按钮
+        self.sidCopyBtn = QtWidgets.QPushButton("复制", sidRow)
+        self.sidCopyBtn.setFixedSize(36, 22)
+        self.sidCopyBtn.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.sidCopyBtn.setStyleSheet(
+            "QPushButton {"
+            "  background: #fff; border: 1px solid #d0d0d0;"
+            "  border-radius: 4px; font: 8pt '微软雅黑'; color: #555;"
+            "}"
+            "QPushButton:hover { background: #f0f0f0; }"
+        )
+        self.sidCopyBtn.clicked.connect(self._copy_sessionid)
+        sidRowL.addWidget(sidKey)
+        sidRowL.addWidget(self.sidVal)
+        sidRowL.addWidget(self.sidCopyBtn)
+        rightLayout.addWidget(sidRow)
 
         # 分割线
         line2 = QtWidgets.QFrame(self.rightPanel)
@@ -418,6 +446,14 @@ class MainWindow_Ui(QtCore.QObject):
         self._ws_flush_thread = threading.Thread(target=_flush, daemon=True)
         self._ws_flush_thread.start()
 
+    def _copy_sessionid(self):
+        sid = self.config.get("sessionid", "")
+        if sid:
+            QtWidgets.QApplication.clipboard().setText(sid)
+            # 按钮短暂显示"已复制"提示
+            self.sidCopyBtn.setText("✓")
+            QtCore.QTimer.singleShot(1500, lambda: self.sidCopyBtn.setText("复制"))
+
     def _fetch_and_emit_user_info(self, sessionid):
         # 子线程：拉取用户信息后 emit 信号更新右侧面板。
         try:
@@ -471,6 +507,8 @@ class MainWindow_Ui(QtCore.QObject):
         self.nameLabel.setText(name)
         self.schoolVal.setText(school)
         self.snoVal.setText(sno)
+        self.sidVal.setText(self.config["sessionid"])
+        self.sidVal.setToolTip(self.config["sessionid"])  # 鼠标悬停显示完整内容
 
         # 停止刷二维码
         self._ws_flush_on = False
@@ -560,6 +598,7 @@ class MainWindow_Ui(QtCore.QObject):
         self.nameLabel.setText("—")
         self.schoolVal.setText("—")
         self.snoVal.setText("—")
+        self.sidVal.setText("—")
         self._start_login_ws()
 
     def check_config(self, dir_route, config_route):

@@ -4,6 +4,7 @@ import json
 import urllib3
 import requests
 import random
+import platform
 import os
 import sys
 
@@ -32,6 +33,10 @@ LLM_PROVIDERS = {
     "DeepSeek": {
         "base_url": "https://api.deepseek.com",
         "model": "deepseek-chat"
+    },
+    "DeepSeek-R1": {
+        "base_url": "https://api.deepseek.com",
+        "model": "deepseek-reasoner"
     },
     "智谱": {
         "base_url": "https://open.bigmodel.cn/api/paas/v4/",
@@ -114,7 +119,10 @@ def get_config_path():
 
 def get_config_dir():
     # 获取配置文件所在文件夹
-    appdata_route = os.environ['APPDATA']
+    if platform.system() == "Windows":
+        appdata_route = os.environ['APPDATA']
+    else:
+        appdata_route = os.environ['HOME']
     dir_route = appdata_route + "\\RainClassroomAssistant"
     return dir_route
 

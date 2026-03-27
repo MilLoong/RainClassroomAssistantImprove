@@ -59,7 +59,7 @@ def monitor(main_ui):
         # 网络异常处理
         while not network_status:
             ret = test_network()
-            if ret == True:
+            if ret:
                 try:
                     lesson_list = get_on_lesson(sessionid)
                     # lesson_list_old = get_on_lesson_old()

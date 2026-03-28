@@ -56,7 +56,7 @@ def test_llm_api(api_key, provider="DeepSeek"):
             max_tokens=5,
             **build_llm_request_kwargs(provider, cfg["model"])
         )
-        reply = response.choices[0].message.content.strip()
+        reply = (response.choices[0].message.content or "（模型未返回文字，但连接正常）").strip()
         return True, f"连接成功，模型回复：{reply}"
     except Exception as e:
         return False, f"连接失败：{str(e)}"
@@ -79,37 +79,46 @@ def test_llm_api_with_config(api_key, provider, model=None, base_url=None):
             max_tokens=5,
             **build_llm_request_kwargs(provider, model)
         )
-        reply = response.choices[0].message.content.strip()
+        reply = (response.choices[0].message.content or "（模型未返回文字，但连接正常）").strip()
         return True, f"连接成功，模型回复：{reply}"
     except Exception as e:
         return False, f"连接失败：{str(e)}"
 
 class Lesson:
     def __init__(self, lessonid, lessonname, classroomid, main_ui):
-        self.classroomid = classroomid
+        self.main_ui = main_ui
+        self.config = main_ui.config
         self.lessonid = lessonid
         self.lessonname = lessonname
-        self.sessionid = main_ui.config["sessionid"]
-        self.headers = {
-            "Cookie": "sessionid=%s" % self.sessionid,
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:97.0) Gecko/20100101 Firefox/97.0",
-        }
+        self.classroomid = classroomid
+        # 所有逻辑统一走电脑端 sessionid
+        sessionid = self.config.get("sessionid", "")
+        self.headers = {"Cookie": "sessionid=%s" % sessionid}
+
+        checkin_mode = self.config.get("checkin_mode", "pc")
+        if checkin_mode == "mobile":
+            sid = self.config.get("sid", "")
+            self.checkin_headers = {
+                "x-client": "app",
+                "Cookie": "sid=%s" % sid,
+            }
+        else:
+            self.checkin_headers = self.headers
+
         self.receive_danmu = {}
         self.sent_danmu_dict = {}
         self.danmu_dict = {}
         self.problems_ls = []
         self.unlocked_problem = []
         self.classmates_ls = []
+        self.ws_running = False
         self.add_message = main_ui.add_message_signal.emit
         self.add_course = main_ui.add_course_signal.emit
         self.del_course = main_ui.del_course_signal.emit
         self.update_problem = main_ui.update_problem_signal.emit
-        self.config = main_ui.config
-        code, rtn = get_user_info(self.sessionid)
-        self.user_uid = rtn["id"]
-        self.user_uname = rtn["name"]
-        self.main_ui = main_ui
-        self.ws_running = False
+        code, rtn = get_user_info(sessionid)
+        self.user_uid = rtn.get("id", "0")
+        self.user_uname = rtn.get("name", "未知用户")
 
     def _get_ppt(self, presentationid):
         r = requests.get(
@@ -161,7 +170,7 @@ class Lesson:
                 temperature=0.0,
                 **build_llm_request_kwargs(provider, model)
             )
-            raw = response.choices[0].message.content.strip().upper()
+            raw = (response.choices[0].message.content or "").strip().upper()
             answers = [c for c in raw if c.isalpha()]
             if p_type == "1" and len(answers) > 1:
                 answers = [answers[0]]
@@ -212,19 +221,25 @@ class Lesson:
             return False
 
     def on_open(self, wsapp):
-        self.handshark = {"op": "hello", "userid": self.user_uid, "role": "student",
-                          "auth": self.auth, "lessonid": self.lessonid}
+        self.add_message(f"WebSocket 连接成功！正在监听：{self.lessonname}", 0)
+        self.handshark = {
+            "op": "hello",
+            "userid": self.user_uid,
+            "role": "student",
+            "auth": self.auth,
+            "lessonid": self.lessonid
+        }
         wsapp.send(json.dumps(self.handshark))
+        self.retry_count = 0
 
     def checkin_class(self):
         r = requests.post(
             url="https://www.yuketang.cn/api/v3/lesson/checkin",
-            headers=self.headers,
+            headers=self.checkin_headers,
             data=json.dumps(
                 {
-                    "source": 21, 
-                    "lessonId": self.lessonid,
-                    "joinIfNotIn": True
+                    "source": 5,
+                    "lessonId": self.lessonid
                 }
             ),
             proxies={"http": None, "https": None}
@@ -239,7 +254,14 @@ class Lesson:
             if msg == 'LESSON_END':
                 return None
             elif 'DYNAMIC_QR_CHECK_IN_REFUSED' in msg:
-                self.add_message("%s为动态二维码签到，请手动签到" % (self.lessonname), 7)
+                self.add_message("%s为动态二维码签到，请切换签到方式" % (self.lessonname), 7)
+                return None
+            elif msg == 'UNAUTHENTICATED':
+                checkin_mode = self.config.get("checkin_mode", "pc")
+                if checkin_mode == "mobile":
+                    self.add_message("%s签到失败：sid 异常" % self.lessonname, 7)
+                else:
+                    self.add_message("%s签到失败：sessionid 异常" % self.lessonname, 7)
                 return None
             else:
                 self.add_message("%s签到失败，原因：%s" % (self.lessonname, msg), 7)
@@ -475,12 +497,12 @@ class Lesson:
         # WebSocket 重连
 
         self.ws_running = True
-        retry_count = 0
+        self.retry_count = 0
         max_retry = 5
 
-        while self.ws_running and retry_count < max_retry:
+        while self.ws_running and self.retry_count < max_retry:
             try:
-                self.add_message(f"WebSocket 连接中...（第 {retry_count + 1} 次）", 0)
+                self.add_message(f"WebSocket 连接中...（第 {self.retry_count + 1} 次）", 0)
 
                 self.normal_close = False
 
@@ -509,15 +531,15 @@ class Lesson:
                 if self.normal_close:
                     break
 
-                retry_count += 1
+                self.retry_count += 1
                 time.sleep(3)
 
             except Exception as e:
                 self.add_message(f"WebSocket 连接异常: {e}", 7)
-                retry_count += 1
+                self.retry_count += 1
                 time.sleep(3)
             
-        if self.ws_running and retry_count >= max_retry:
+        if self.ws_running and self.retry_count >= max_retry:
             self.add_message("WebSocket 重连次数已达上限，停止监听", 7)
 
         meg = "%s监听结束" % self.lessonname

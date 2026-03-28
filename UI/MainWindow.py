@@ -34,6 +34,21 @@ class MainWindow_Ui(QtCore.QObject):
     # 用户信息面板专用信号（跨线程安全更新右侧面板）
     _user_panel_signal    = QtCore.pyqtSignal(str, str, str, QtGui.QPixmap)
 
+    @QtCore.pyqtSlot()
+    def refresh_login_status(self):
+        sessionid = self.config.get("sessionid", "")
+
+        if sessionid:
+            self.update_status_signal.emit("已登录")
+            threading.Thread(
+                target=self._fetch_and_emit_user_info,
+                args=(sessionid,),
+                daemon=True
+            ).start()
+        else:
+            self.update_status_signal.emit("未登录")
+            self._user_panel_signal.emit("未登录", "---", "---", QtGui.QPixmap())
+
     def setupUi(self, MainWindow):
         ui_font_family = get_ui_font_family()
         title_font_family = get_title_font_family()
@@ -47,7 +62,7 @@ class MainWindow_Ui(QtCore.QObject):
         _login_status, _user_info = self.check_login()
 
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1060, 700)
+        MainWindow.resize(1070, 800)
         MainWindow.setWindowTitle("摸鱼课堂")
         MainWindow.setAutoFillBackground(False)
         MainWindow.setStyleSheet("background-color: rgb(255, 255, 255);")
@@ -154,7 +169,7 @@ class MainWindow_Ui(QtCore.QObject):
 
         # 右侧：登录 / 用户信息面板
         self.rightPanel = QtWidgets.QWidget(bodyWidget)
-        self.rightPanel.setFixedWidth(220)
+        self.rightPanel.setFixedWidth(260)
         self.rightPanel.setStyleSheet(
             "background-color: #f7f8fa;"
             "border-left: 1px solid #e8e8e8;"
@@ -162,7 +177,7 @@ class MainWindow_Ui(QtCore.QObject):
         rightLayout = QtWidgets.QVBoxLayout(self.rightPanel)
         rightLayout.setContentsMargins(12, 16, 12, 16)
         rightLayout.setSpacing(10)
-        rightLayout.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignHCenter)
+        rightLayout.setAlignment(QtCore.Qt.AlignTop)
 
         # 头像 / 二维码容器
         self.avatarLabel = QtWidgets.QLabel(self.rightPanel)
@@ -180,12 +195,13 @@ class MainWindow_Ui(QtCore.QObject):
             self.rightPanel
         )
         self.qrHint.setAlignment(QtCore.Qt.AlignCenter)
+        self.qrHint.setWordWrap(True)
         self.qrHint.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #888;")
         rightLayout.addWidget(self.qrHint)
 
         # 状态徽标
         self.statusBadge = QtWidgets.QLabel(self.rightPanel)
-        self.statusBadge.setFixedHeight(24)
+        self.statusBadge.setFixedHeight(50)
         self.statusBadge.setAlignment(QtCore.Qt.AlignCenter)
         if _login_status:
             self._badge_success()
@@ -233,6 +249,22 @@ class MainWindow_Ui(QtCore.QObject):
         snoRowL.addWidget(snoKey)
         snoRowL.addWidget(self.snoVal)
         rightLayout.addWidget(snoRow)
+
+        # 手机号（仅手机端签到时显示）
+        self.phoneRow = QtWidgets.QWidget(self.rightPanel)
+        phoneRowL = QtWidgets.QHBoxLayout(self.phoneRow)
+        phoneRowL.setContentsMargins(0, 0, 0, 0)
+        phoneKey = QtWidgets.QLabel("手机", self.phoneRow)
+        phoneKey.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #999;")
+        phoneKey.setFixedWidth(36)
+        self.phoneVal = QtWidgets.QLabel("—", self.phoneRow)
+        self.phoneVal.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #444;")
+        self.phoneVal.setWordWrap(True)
+        phoneRowL.addWidget(phoneKey)
+        phoneRowL.addWidget(self.phoneVal)
+        self.phoneRow.setVisible(False)  # 默认隐藏，手机端签到时显示
+        rightLayout.addWidget(self.phoneRow)
+
         rightLayout.addStretch()
 
         # 分割线
@@ -244,15 +276,30 @@ class MainWindow_Ui(QtCore.QObject):
         # 答题状态
         self.answer_mode_label = QtWidgets.QLabel("当前答题状态：—", self.rightPanel)
         self.answer_mode_label.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #555;")
-        self.answer_mode_label.setWordWrap(True)
+        self.answer_mode_label.setWordWrap(False)
         rightLayout.addWidget(self.answer_mode_label)
 
         # API 测试状态
         self.api_status_label = QtWidgets.QLabel("", self.rightPanel)
         self.api_status_label.setStyleSheet(f"font: 8pt '{ui_font_family}'; color: #888;")
-        self.api_status_label.setWordWrap(True)
+        self.api_status_label.setWordWrap(False)
         self.api_status_label.setVisible(False)
         rightLayout.addWidget(self.api_status_label)
+
+        # 签到方式显示
+        self.checkin_mode_label = QtWidgets.QLabel("签到方式：—", self.rightPanel)
+        self.checkin_mode_label.setStyleSheet(
+            f"""
+            font: 9pt '{ui_font_family}';
+            color: #d46b08;
+            background: #fff7e6;
+            border-left: 3px solid #fa8c16;
+            border-radius: 6px;
+            padding: 4px 8px;
+            """
+        )
+        self.checkin_mode_label.setWordWrap(True)
+        rightLayout.addWidget(self.checkin_mode_label)
 
         # 重新登录按钮
         self.relogin_btn = QtWidgets.QPushButton("重新登录", self.rightPanel)
@@ -267,7 +314,7 @@ class MainWindow_Ui(QtCore.QObject):
         )
         rightLayout.addWidget(self.relogin_btn)
 
-        bodyLayout.addWidget(self.rightPanel, 0)
+        bodyLayout.addWidget(self.rightPanel, 1)
 
         rootLayout.addWidget(bodyWidget, 1)
 
@@ -293,19 +340,24 @@ class MainWindow_Ui(QtCore.QObject):
 
         # 根据登录状态启动对应流程
         if _login_status:
+            _token = self.config.get("sessionid", "")
             threading.Thread(
                 target=self._fetch_and_emit_user_info,
-                args=(self.config["sessionid"],),
+                args=(_token,),
                 daemon=True
             ).start()
-            self.add_message_signal.emit("登录成功，当前登录用户：" + _user_info["name"], 0)
+            self.add_message_signal.emit("登录成功，当前登录用户：" + _user_info.get("name", ""), 0)
         else:
-            self._start_login_ws()
+            if not self.config.get("sessionid"):
+                self._start_login_ws()
 
         self.refresh_answer_mode()
 
+        QtCore.QTimer.singleShot(0, self.refresh_login_status)
+
     # 右侧面板：状态徽标辅助
     def _badge_waiting(self):
+        self.statusBadge.setVisible(True)
         self.statusBadge.setText("等待扫码")
         self.statusBadge.setStyleSheet(
             f"font: 9pt '{get_ui_font_family()}'; color: #888;"
@@ -313,6 +365,7 @@ class MainWindow_Ui(QtCore.QObject):
         )
 
     def _badge_success(self):
+        self.statusBadge.setVisible(True)
         self.statusBadge.setText("已登录 √")
         self.statusBadge.setStyleSheet(
             f"font: 9pt '{get_ui_font_family()}'; color: #07c160;"
@@ -434,7 +487,7 @@ class MainWindow_Ui(QtCore.QObject):
         # 子线程：拉取用户信息后 emit 信号更新右侧面板。
         try:
             code, data = get_user_info(sessionid)
-            if code != 0:
+            if code != 0 or not data:
                 return
             name   = data.get("name", "—")
             school = data.get("school", "—")
@@ -547,6 +600,18 @@ class MainWindow_Ui(QtCore.QObject):
                     self.api_status_label.setText("未填写 API Key")
                     self.api_status_label.setStyleSheet(f"font: 8pt '{get_ui_font_family()}'; color: #f00;")
             self.api_status_label.setVisible(True)
+        mode = self.config.get("checkin_mode", "pc")
+        if mode == "pc":
+            text = "签到方式：💻 电脑端签到"
+            self.phoneRow.setVisible(False)
+        else:
+            text = "签到方式：📱 手机端签到"
+            # 手机端：显示已绑定的手机号（若有）
+            phone = self.config.get("mobile_phone", "")
+            self.phoneVal.setText(phone if phone else "—")
+            self.phoneRow.setVisible(True)
+
+        self.checkin_mode_label.setText(text)
 
     def show_config(self):
         dialog = QtWidgets.QDialog()
@@ -562,20 +627,38 @@ class MainWindow_Ui(QtCore.QObject):
             self.config.clear()
             self.config.update(new_config)
             self.refresh_answer_mode()
+            self.refresh_right_panel()
 
     def show_login(self):
-        # 重新登录：重置右侧面板并重启 WebSocket。
-        self.avatarLabel.clear()
-        self.avatarLabel.setStyleSheet(
-            "border: 1px solid #e0e0e0; border-radius: 8px; background: #fafafa;"
-        )
-        self.qrHint.setText("微信扫码登录")
-        self.qrHint.setStyleSheet(f"font: 9pt '{get_ui_font_family()}'; color: #888;")
-        self._badge_waiting()
-        self.nameLabel.setText("—")
-        self.schoolVal.setText("—")
-        self.snoVal.setText("—")
-        self._start_login_ws()
+        # 重新登录：根据当前签到方式决定流程
+        self.refresh_right_panel(force_relogin=True)
+
+    def refresh_right_panel(self, mode=None, force_relogin=False):
+        self.current_mode = mode
+
+        sessionid = self.config.get("sessionid", "")
+
+        if sessionid and not force_relogin:
+            self._badge_success()
+            threading.Thread(
+                target=self._fetch_and_emit_user_info,
+                args=(sessionid,),
+                daemon=True
+            ).start()
+        else:
+            self.avatarLabel.clear()
+            self.avatarLabel.setStyleSheet(
+                "border: 1px solid #e0e0e0; border-radius: 8px; background: #fafafa;"
+            )
+            self.qrHint.setText("微信扫码登录")
+            self.qrHint.setStyleSheet(f"font: 9pt '{get_ui_font_family()}'; color: #888;")
+            self._badge_waiting()
+
+            self.nameLabel.setText("—")
+            self.schoolVal.setText("—")
+            self.snoVal.setText("—")
+
+            self._start_login_ws()
 
     def check_config(self, dir_route, config_route):
         if not os.path.exists(dir_route):
@@ -602,10 +685,11 @@ class MainWindow_Ui(QtCore.QObject):
                 return initial_data, "配置文件读取失败，已重新生成"
 
     def check_login(self):
-        code, user_info = get_user_info(self.config["sessionid"])
-        if code == 50000:
-            return False, user_info
-        elif code == 0:
+        sessionid = self.config.get("sessionid", "")
+        if not sessionid:
+            return False, {}
+        code, user_info = get_user_info(sessionid)
+        if code == 0:
             return True, user_info
         return False, {}
 

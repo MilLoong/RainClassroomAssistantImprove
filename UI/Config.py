@@ -123,7 +123,7 @@ f"font: 9pt \"{ui_font_family}\";")
         self.verticalLayout_10.addWidget(self.widget_3)
         self.verticalLayout_4.addWidget(self.when_audio_on)
         self.verticalLayout_12.addWidget(self.audio_config)
-        
+
         # 答题配置
         self.answer_config = QtWidgets.QGroupBox(self.scrollAreaWidgetContents)
         self.answer_config.setObjectName("answer_config")
@@ -223,12 +223,95 @@ f"font: 9pt \"{ui_font_family}\";")
         self.verticalLayout_8.addWidget(self.api_test_result)
         self.verticalLayout_5.addWidget(self.when_answer_on)
         self.verticalLayout_12.addWidget(self.answer_config)
+        self.is_random_answer.stateChanged.connect(self.update_llm_visibility)
 
         # 监听配置
         self.poll_config = QtWidgets.QGroupBox(self.scrollAreaWidgetContents)
         self.poll_config.setObjectName("poll_config")
         self.verticalLayout_poll = QtWidgets.QVBoxLayout(self.poll_config)
         self.verticalLayout_poll.setObjectName("verticalLayout_poll")
+
+        # 签到配置
+        self.CheckinGroup = QtWidgets.QGroupBox("签到配置", Dialog)
+        self.CheckinGroup.setStyleSheet(f"font: 10pt '{ui_font_family}';")
+        checkinLayout = QtWidgets.QVBoxLayout(self.CheckinGroup)
+
+        self.checkin_mode_label = QtWidgets.QLabel("签到方式", self.CheckinGroup)
+        self.checkin_mode_label.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #666;")
+        self.checkin_mode_combo = QtWidgets.QComboBox(self.CheckinGroup)
+        self.checkin_mode_combo.addItems(["电脑端签到", "手机端签到"])
+        self.checkin_mode_combo.setStyleSheet(f"font: 9pt '{ui_font_family}'; padding: 4px;")
+        checkinLayout.addWidget(self.checkin_mode_label)
+        checkinLayout.addWidget(self.checkin_mode_combo)
+
+        # 手机端签到专属区域（切换为手机端时才显示）
+        self.mobile_checkin_widget = QtWidgets.QWidget(self.CheckinGroup)
+        self.mobile_checkin_widget.setVisible(False)
+        mobileLayout = QtWidgets.QVBoxLayout(self.mobile_checkin_widget)
+        mobileLayout.setContentsMargins(0, 6, 0, 0)
+        mobileLayout.setSpacing(6)
+
+        # 提示文字
+        mobile_hint = QtWidgets.QLabel(
+            "手机端签到需要绑定手机号，请输入手机号并获取验证码后点击验证登录。",
+            self.mobile_checkin_widget
+        )
+        mobile_hint.setWordWrap(True)
+        mobile_hint.setStyleSheet(f"font: 8pt '{ui_font_family}'; color: #888;")
+        mobileLayout.addWidget(mobile_hint)
+
+        # 手机号输入行
+        phoneInputRow = QtWidgets.QWidget(self.mobile_checkin_widget)
+        phoneInputRowL = QtWidgets.QHBoxLayout(phoneInputRow)
+        phoneInputRowL.setContentsMargins(0, 0, 0, 0)
+        phone_label = QtWidgets.QLabel("手机号：", phoneInputRow)
+        phone_label.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #555;")
+        phone_label.setFixedWidth(56)
+        self.mobile_phone_input = QtWidgets.QLineEdit(phoneInputRow)
+        self.mobile_phone_input.setPlaceholderText("请输入手机号")
+        self.mobile_phone_input.setMaxLength(11)
+        self.mobile_phone_input.setStyleSheet(f"font: 9pt '{ui_font_family}'; padding: 3px;")
+        phoneInputRowL.addWidget(phone_label)
+        phoneInputRowL.addWidget(self.mobile_phone_input)
+        mobileLayout.addWidget(phoneInputRow)
+
+        # 验证码输入行
+        codeInputRow = QtWidgets.QWidget(self.mobile_checkin_widget)
+        codeInputRowL = QtWidgets.QHBoxLayout(codeInputRow)
+        codeInputRowL.setContentsMargins(0, 0, 0, 0)
+        code_label = QtWidgets.QLabel("验证码：", codeInputRow)
+        code_label.setStyleSheet(f"font: 9pt '{ui_font_family}'; color: #555;")
+        code_label.setFixedWidth(56)
+        self.sms_code_input = QtWidgets.QLineEdit(codeInputRow)
+        self.sms_code_input.setPlaceholderText("请输入短信验证码")
+        self.sms_code_input.setMaxLength(6)
+        self.sms_code_input.setStyleSheet(f"font: 9pt '{ui_font_family}'; padding: 3px;")
+        self.verify_mobile_btn = QtWidgets.QPushButton("验证登录", codeInputRow)
+        self.verify_mobile_btn.setFixedWidth(80)
+        self.verify_mobile_btn.setFixedHeight(26)
+        self.verify_mobile_btn.setStyleSheet(
+            f"QPushButton {{ background: #07c160; color: #fff; border-radius: 4px; font: 8pt '{ui_font_family}'; }}"
+            "QPushButton:hover { background: #09d16b; }"
+            "QPushButton:disabled { background: #aaa; }"
+        )
+        self.verify_mobile_btn.clicked.connect(self.verify_mobile_login)
+        codeInputRowL.addWidget(code_label)
+        codeInputRowL.addWidget(self.sms_code_input)
+        codeInputRowL.addWidget(self.verify_mobile_btn)
+        mobileLayout.addWidget(codeInputRow)
+
+        # 状态提示标签
+        self.mobile_login_status = QtWidgets.QLabel("", self.mobile_checkin_widget)
+        self.mobile_login_status.setWordWrap(True)
+        self.mobile_login_status.setStyleSheet(f"font: 8pt '{ui_font_family}'; color: #888;")
+        mobileLayout.addWidget(self.mobile_login_status)
+
+        checkinLayout.addWidget(self.mobile_checkin_widget)
+        self.verticalLayout_12.addWidget(self.CheckinGroup)
+
+        # 切换签到方式时显示/隐藏手机端区域
+        self.checkin_mode_combo.currentIndexChanged.connect(self.on_checkin_mode_changed)
+
         # 签到延迟
         self.label_checkin_delay = QtWidgets.QLabel(self.poll_config)
         self.label_checkin_delay.setWordWrap(True)
@@ -282,6 +365,18 @@ f"font: 9pt \"{ui_font_family}\";")
 
         self.retranslateUi(Dialog)
         QtCore.QMetaObject.connectSlotsByName(Dialog)
+
+    def update_llm_visibility(self):
+        # 控制模型配置框的显隐：勾选随机作答时隐藏，不勾选时展示
+        # 只要勾选了随机作答，就隐藏 AI 配置
+        is_hidden = self.is_random_answer.isChecked()
+        
+        # 这里的控件名必须和你代码中定义的一一对应
+        self.provider_widget.setVisible(not is_hidden)
+        self.llm_widget.setVisible(not is_hidden)
+        self.model_widget.setVisible(not is_hidden)
+        self.base_url_widget.setVisible(not is_hidden)
+        self.api_test_result.setVisible(not is_hidden)
 
     def test_api(self):
         api_key = self.apikey_input.text().strip()
@@ -429,7 +524,15 @@ f"font: 9pt \"{ui_font_family}\";")
         self.others_called.setChecked(config["audio_config"]["audio_type"]["others_called"])
         self.course.setChecked(config["audio_config"]["audio_type"]["course_info"])
         self.network.setChecked(config["audio_config"]["audio_type"]["network_info"])
-        # 答题配置
+        # 签到方式
+        mode = config.get("checkin_mode", "pc")
+        if mode == "pc":
+            self.checkin_mode_combo.setCurrentIndex(0)
+        else:
+            self.checkin_mode_combo.setCurrentIndex(1)
+        # 加载已保存的手机号
+        self.mobile_phone_input.setText(config.get("mobile_phone", ""))
+        self.on_checkin_mode_changed(self.checkin_mode_combo.currentIndex())
         self.answer_on.setChecked(config["auto_answer"])
         if config["answer_config"]["answer_delay"]["type"] == 1:
             self.delay_time_radio_1.setChecked(True)
@@ -444,6 +547,8 @@ f"font: 9pt \"{ui_font_family}\";")
         self.llm_base_url_input.setText(ans_cfg.get("llm_base_url", get_provider_config(self.llm_provider.currentText()).get("base_url", "")))
         self.toggle_llm_config()
         self.enable_delay_custom()
+        # 答题配置
+        self.update_llm_visibility()
         # 加载上次测试结果
         test_status = ans_cfg.get("api_test_status", {})
         if test_status.get("tested"):
@@ -473,7 +578,12 @@ f"font: 9pt \"{ui_font_family}\";")
         self.dialog_config = config
 
     def save_config(self, dialog):
-        config = self.dialog_config
+        config_path = get_config_path()
+        try:
+            with open(config_path, "r", encoding='utf-8') as f:
+                config = json.load(f)
+        except Exception:
+            config = self.dialog_config
         # 弹幕配置
         config["auto_danmu"] = self.danmu_on.isChecked()
         config["danmu_config"]["danmu_limit"] = self.danmu_spinBox.value()
@@ -487,6 +597,10 @@ f"font: 9pt \"{ui_font_family}\";")
         config["audio_config"]["audio_type"]["others_called"] = self.others_called.isChecked()
         config["audio_config"]["audio_type"]["course_info"] = self.course.isChecked()
         config["audio_config"]["audio_type"]["network_info"] = self.network.isChecked()
+        # 签到方式
+        config["checkin_mode"] = "pc" if self.checkin_mode_combo.currentIndex() == 0 else "mobile"
+        # 手机号（手机端签到时保存输入框里的值）
+        config["mobile_phone"] = self.mobile_phone_input.text().strip()
         # 答题配置
         config["auto_answer"] = self.answer_on.isChecked()
         if self.delay_time_radio_1.isChecked():
@@ -542,3 +656,59 @@ f"font: 9pt \"{ui_font_family}\";")
         self.poll_config.setTitle(_translate("Dialog", "监听配置"))
         self.label_checkin_delay.setText(_translate("Dialog", "签到延迟（秒）：检测到课程后延迟n秒再签到，0为立即签到"))
         self.label_poll_interval.setText(_translate("Dialog", "轮询间隔（秒）：每隔n秒检测一次是否有课程"))
+
+    #  签到方式切换
+    def on_checkin_mode_changed(self, index):
+        # 切换签到方式时显示/隐藏手机端登录区域。
+        is_mobile = (index == 1)
+        self.mobile_checkin_widget.setVisible(is_mobile)
+        if not is_mobile:
+            # 切回电脑端时清空状态提示，不清空手机号（方便再切回来）
+            self.mobile_login_status.setText("")
+
+    def verify_mobile_login(self):
+        phone = self.mobile_phone_input.text().strip()
+        code  = self.sms_code_input.text().strip() 
+        
+        if not phone or not code:
+            self.mobile_login_status.setStyleSheet(f"color: #f00;")
+            self.mobile_login_status.setText("请填写手机号和验证码")
+            return
+
+        self.verify_mobile_btn.setEnabled(False)
+        self.mobile_login_status.setText("验证中...")
+
+        def _do_verify():
+            from Scripts.Utils import verify_mobile_sms_code, get_config_path
+            from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+
+            success, msg, sid = verify_mobile_sms_code(phone, code)
+
+            if success and sid:
+                config_path = get_config_path()
+                try:
+                    with open(config_path, "r", encoding='utf-8') as f:
+                        cfg = json.load(f)
+
+                    cfg["checkin_mode"] = "mobile"
+                    # 这里直接覆盖第一层字典即可，不再用什么 mobile_config 的占位符了
+                    cfg["sid"] = sid
+                    cfg["mobile_phone"] = phone
+
+                    with open(config_path, "w", encoding='utf-8') as f:
+                        json.dump(cfg, f, indent=4, ensure_ascii=False)
+
+                    if hasattr(self, "main_win"):
+                        QMetaObject.invokeMethod(self.main_win, "refresh_login_status", Qt.QueuedConnection)
+
+                    msg = "登录成功"
+                except Exception as e:
+                    success = False
+                    msg = f"保存配置失败: {e}"
+
+            color = "#07c160" if success else "#f00"
+            QMetaObject.invokeMethod(self.mobile_login_status, "setText", Qt.QueuedConnection, Q_ARG(str, msg))
+            QMetaObject.invokeMethod(self.mobile_login_status, "setStyleSheet", Qt.QueuedConnection, Q_ARG(str, f"color: {color};"))
+            QMetaObject.invokeMethod(self.verify_mobile_btn, "setEnabled", Qt.QueuedConnection, Q_ARG(bool, True))
+
+        threading.Thread(target=_do_verify, daemon=True).start()

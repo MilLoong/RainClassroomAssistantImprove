@@ -43,7 +43,8 @@ def monitor(main_ui):
     # 检测到的未加入监听列表的课程
     lesson_list = []
     network_status = True
-    sessionid = main_ui.config["sessionid"]
+    # 监听课程统一走电脑端 sessionid，手机端签到在 Lesson 内部处理
+    sessionid = main_ui.config.get("sessionid", "")
     poll_interval = main_ui.config.get("poll_interval", 30)
 
     while True:

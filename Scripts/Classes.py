@@ -100,7 +100,7 @@ class Lesson:
             sid = self.config.get("sid", "")
             self.checkin_headers = {
                 "x-client": "app",
-                "Cookie": "sid=%s" % sid,
+                "Cookie": "sid=%s" % sid
             }
         else:
             self.checkin_headers = self.headers
@@ -238,7 +238,7 @@ class Lesson:
             headers=self.checkin_headers,
             data=json.dumps(
                 {
-                    "source": 5,
+                    "source": 21,
                     "lessonId": self.lessonid
                 }
             ),

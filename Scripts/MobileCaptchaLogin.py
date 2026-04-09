@@ -71,6 +71,10 @@ class _CaptchaBridge(QObject):
     def onError(self, _code, msg):
         self._dialog.set_status("验证失败（%s），请刷新重试" % msg)
 
+    @pyqtSlot()
+    def onRefresh(self):
+        self._dialog.refresh_captcha()
+
 
 class CaptchaSmsDialog(QDialog):
     def __init__(self, phone_number: str, data: dict, parent=None):
@@ -168,7 +172,7 @@ button {
 </div>
 <div id="bar">
   <button id="btn-ok"  onclick="submitAns()">&#10003; 确认</button>
-  <button id="btn-ref" onclick="location.reload()">&#8635; 刷新</button>
+  <button id="btn-ref" onclick="refreshCaptcha()">&#8635; 刷新</button>
 </div>
 <div id="msg"></div>
 <script>
@@ -251,6 +255,17 @@ function submitAns() {
     btn.disabled = false;
   });
 }
+
+function refreshCaptcha() {
+  const msg = document.getElementById('msg');
+  msg.style.color = '#666';
+  msg.textContent = '正在刷新挑战...';
+  if (pyBridge && pyBridge.onRefresh) {
+    pyBridge.onRefresh();
+  } else {
+    location.reload();
+  }
+}
 </script>
 </body>
 </html>"""
@@ -262,6 +277,15 @@ function submitAns() {
             .replace("__SESS__", sess)
         )
         self._web.setHtml(html, QUrl("https://turing.captcha.gtimg.com/"))
+
+    def refresh_captcha(self):
+        self.set_status("正在刷新验证码挑战...")
+        try:
+            new_data = _get_captcha_prehandle()
+            self._data = new_data
+            self._load(new_data)
+        except Exception as e:
+            self.set_status("刷新失败：%s" % e)
 
     def on_captcha_done(self, ticket: str, randstr: str):
         self.set_status("正在发送验证码...")

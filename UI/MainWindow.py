@@ -623,7 +623,7 @@ class MainWindow_Ui(QtCore.QObject):
         config_ui.enable_delay_custom()
         if dialog.exec_():
             config_route = get_config_path()
-            with open(config_route, "r") as f:
+            with open(config_route, "r", encoding="utf-8") as f:
                 new_config = json.load(f)
             self.config.clear()
             self.config.update(new_config)
@@ -666,23 +666,23 @@ class MainWindow_Ui(QtCore.QObject):
             os.makedirs(dir_route)
         if not os.path.exists(config_route):
             initial_data = get_initial_data()
-            with open(config_route, "w+") as f:
-                json.dump(initial_data, f)
+            with open(config_route, "w+", encoding="utf-8") as f:
+                json.dump(initial_data, f, ensure_ascii=False)
             return initial_data, "没有检测到配置文件，已自动创建"
         else:
             try:
-                with open(config_route, "r") as f:
+                with open(config_route, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 normalized = normalize_config(data)
                 if normalized != data:
-                    with open(config_route, "w+") as f:
-                        json.dump(normalized, f)
+                    with open(config_route, "w+", encoding="utf-8") as f:
+                        json.dump(normalized, f, ensure_ascii=False)
                     return normalized, "配置文件已读取，并已自动补全 LLM 配置"
                 return normalized, "配置文件已读取"
             except Exception:
-                with open(config_route, "w+") as f:
+                with open(config_route, "w+", encoding="utf-8") as f:
                     initial_data = get_initial_data()
-                    json.dump(initial_data, f)
+                    json.dump(initial_data, f, ensure_ascii=False)
                 return initial_data, "配置文件读取失败，已重新生成"
 
     def check_login(self):

@@ -257,11 +257,7 @@ class Lesson:
                 self.add_message("%s为动态二维码签到，请切换签到方式" % (self.lessonname), 7)
                 return None
             elif msg == 'UNAUTHENTICATED':
-                checkin_mode = self.config.get("checkin_mode", "pc")
-                if checkin_mode == "mobile":
-                    self.add_message("%s签到失败：sid 异常" % self.lessonname, 7)
-                else:
-                    self.add_message("%s签到失败：sessionid 异常" % self.lessonname, 7)
+                self.add_message("%s签到失败：没有登录账号或登录过期，请重新登录" % self.lessonname, 7)
                 return None
             else:
                 self.add_message("%s签到失败，原因：%s" % (self.lessonname, msg), 7)

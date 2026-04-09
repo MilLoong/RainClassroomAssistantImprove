@@ -9,6 +9,7 @@ from Scripts.Utils import (
     get_ui_font_family,
     DEFAULT_LLM_PROVIDER,
 )
+from Scripts.MobileCaptchaLogin import request_sms_code_with_captcha
 from Scripts.Classes import test_llm_api_with_config
 import json
 import functools
@@ -159,7 +160,7 @@ f"font: 9pt \"{ui_font_family}\";")
         self.verticalLayout_8.addWidget(self.when_delay_time_2)
         self.is_random_answer = QtWidgets.QCheckBox(self.when_answer_on)
         self.is_random_answer.setObjectName("is_random_answer")
-        self.is_random_answer.setText("随机做答")
+        self.is_random_answer.setText("随机作答")
         self.verticalLayout_8.addWidget(self.is_random_answer)
 
         # 模型选择行
@@ -216,7 +217,7 @@ f"font: 9pt \"{ui_font_family}\";")
         self.horizontalLayout_base_url.addWidget(self.llm_base_url_input)
         self.verticalLayout_8.addWidget(self.base_url_widget)
 
-        # 测试结果提示行
+        # 测试结果提示
         self.api_test_result = QtWidgets.QLabel("", self.when_answer_on)
         self.api_test_result.setWordWrap(True)
         self.api_test_result.setStyleSheet(f"font: 8pt '{ui_font_family}'; color: #888;")
@@ -244,7 +245,7 @@ f"font: 9pt \"{ui_font_family}\";")
         checkinLayout.addWidget(self.checkin_mode_label)
         checkinLayout.addWidget(self.checkin_mode_combo)
 
-        # 手机端签到专属区域（切换为手机端时才显示）
+        # 手机端签到专用区域（切换为手机端时才显示）
         self.mobile_checkin_widget = QtWidgets.QWidget(self.CheckinGroup)
         self.mobile_checkin_widget.setVisible(False)
         mobileLayout = QtWidgets.QVBoxLayout(self.mobile_checkin_widget)
@@ -271,8 +272,17 @@ f"font: 9pt \"{ui_font_family}\";")
         self.mobile_phone_input.setPlaceholderText("请输入手机号")
         self.mobile_phone_input.setMaxLength(11)
         self.mobile_phone_input.setStyleSheet(f"font: 9pt '{ui_font_family}'; padding: 3px;")
+        self.send_mobile_code_btn = QtWidgets.QPushButton("获取验证码", phoneInputRow)
+        self.send_mobile_code_btn.setFixedWidth(88)
+        self.send_mobile_code_btn.setFixedHeight(26)
+        self.send_mobile_code_btn.setStyleSheet(
+            f"QPushButton {{ background: #1677ff; color: #fff; border-radius: 4px; font: 8pt '{ui_font_family}'; }}"
+            "QPushButton:hover { background: #4096ff; }"
+            "QPushButton:disabled { background: #aaa; }"
+        )
         phoneInputRowL.addWidget(phone_label)
         phoneInputRowL.addWidget(self.mobile_phone_input)
+        phoneInputRowL.addWidget(self.send_mobile_code_btn)
         mobileLayout.addWidget(phoneInputRow)
 
         # 验证码输入行
@@ -300,7 +310,7 @@ f"font: 9pt \"{ui_font_family}\";")
         codeInputRowL.addWidget(self.verify_mobile_btn)
         mobileLayout.addWidget(codeInputRow)
 
-        # 状态提示标签
+        # 状态提示
         self.mobile_login_status = QtWidgets.QLabel("", self.mobile_checkin_widget)
         self.mobile_login_status.setWordWrap(True)
         self.mobile_login_status.setStyleSheet(f"font: 8pt '{ui_font_family}'; color: #888;")
@@ -361,6 +371,7 @@ f"font: 9pt \"{ui_font_family}\";")
         self.delay_time_radio_1.clicked.connect(self.enable_delay_custom)
         self.delay_time_radio_2.clicked.connect(self.enable_delay_custom)
         self.llm_provider.currentTextChanged.connect(self.on_provider_changed)
+        self.send_mobile_code_btn.clicked.connect(self.request_mobile_code)
         self.save.clicked.connect(functools.partial(self.save_config,dialog=Dialog))
 
         self.retranslateUi(Dialog)
@@ -371,7 +382,7 @@ f"font: 9pt \"{ui_font_family}\";")
         # 只要勾选了随机作答，就隐藏 AI 配置
         is_hidden = self.is_random_answer.isChecked()
         
-        # 这里的控件名必须和你代码中定义的一一对应
+        # 这里的控件名必须和你代码里定义的一一对应
         self.provider_widget.setVisible(not is_hidden)
         self.llm_widget.setVisible(not is_hidden)
         self.model_widget.setVisible(not is_hidden)
@@ -433,11 +444,11 @@ f"font: 9pt \"{ui_font_family}\";")
             self.dialog_config["answer_config"]["api_test_status"] = test_status
             config_path = get_config_path()
             try:
-                with open(config_path, "r") as f:
+                with open(config_path, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
                 cfg["answer_config"]["api_test_status"] = test_status
-                with open(config_path, "w") as f:
-                    json.dump(cfg, f)
+                with open(config_path, "w", encoding="utf-8") as f:
+                    json.dump(cfg, f, ensure_ascii=False)
             except Exception:
                 pass
 
@@ -618,8 +629,8 @@ f"font: 9pt \"{ui_font_family}\";")
         config["poll_interval"] = self.poll_interval_spinBox.value()
         # 保存
         config_path = get_config_path()
-        with open(config_path,"w+") as f:
-            json.dump(config,f)
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False)
         dialog.accept()
 
     def retranslateUi(self, Dialog):
@@ -657,7 +668,7 @@ f"font: 9pt \"{ui_font_family}\";")
         self.label_checkin_delay.setText(_translate("Dialog", "签到延迟（秒）：检测到课程后延迟n秒再签到，0为立即签到"))
         self.label_poll_interval.setText(_translate("Dialog", "轮询间隔（秒）：每隔n秒检测一次是否有课程"))
 
-    #  签到方式切换
+    # 签到方式切换
     def on_checkin_mode_changed(self, index):
         # 切换签到方式时显示/隐藏手机端登录区域。
         is_mobile = (index == 1)
@@ -691,7 +702,7 @@ f"font: 9pt \"{ui_font_family}\";")
                         cfg = json.load(f)
 
                     cfg["checkin_mode"] = "mobile"
-                    # 这里直接覆盖第一层字典即可，不再用什么 mobile_config 的占位符了
+                    # 直接覆盖顶层字段即可，不再用 mobile_config 占位符
                     cfg["sid"] = sid
                     cfg["mobile_phone"] = phone
 
@@ -712,3 +723,16 @@ f"font: 9pt \"{ui_font_family}\";")
             QMetaObject.invokeMethod(self.verify_mobile_btn, "setEnabled", Qt.QueuedConnection, Q_ARG(bool, True))
 
         threading.Thread(target=_do_verify, daemon=True).start()
+
+    def request_mobile_code(self):
+        phone = self.mobile_phone_input.text().strip()
+        self.send_mobile_code_btn.setEnabled(False)
+        self.mobile_login_status.setStyleSheet("color: #888;")
+        self.mobile_login_status.setText("正在打开图形验证码...")
+        QtWidgets.qApp.processEvents()
+
+        success, msg = request_sms_code_with_captcha(phone, parent=None)
+        color = "#07c160" if success else "#f00"
+        self.mobile_login_status.setStyleSheet(f"color: {color};")
+        self.mobile_login_status.setText(msg)
+        self.send_mobile_code_btn.setEnabled(True)

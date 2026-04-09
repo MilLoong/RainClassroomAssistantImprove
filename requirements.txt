@@ -1,4 +1,5 @@
 PyQt5
+PyQtWebEngine
 pyttsx3
 requests
 urllib3

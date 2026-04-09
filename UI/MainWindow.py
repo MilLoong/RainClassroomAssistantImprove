@@ -617,6 +617,7 @@ class MainWindow_Ui(QtCore.QObject):
         dialog = QtWidgets.QDialog()
         dialog.setMinimumSize(600, 500)
         config_ui = Config_Ui()
+        config_ui.main_win = self
         config_ui.setupUi(dialog)
         config_ui.load_config(self.config)
         config_ui.enable_delay_custom()

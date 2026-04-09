@@ -1,6 +1,6 @@
 import os
 import sys
-from PyQt5 import QtGui, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 from UI.MainWindow import MainWindow_Ui
 
 def _configure_qt_runtime():
@@ -16,7 +16,7 @@ def _configure_qt_runtime():
                 env_lib_dir if not current_ld_library_path
                 else env_lib_dir + ":" + current_ld_library_path
             )
-    # 后续可以直接删去，如果不在WSL调试
+    # 后续可以直接删去，如果不在 WSL 调试
     if is_wsl:
         wslg_runtime_dir = "/mnt/wslg/runtime-dir"
         wayland_display = os.environ.get("WAYLAND_DISPLAY", "wayland-0")
@@ -31,7 +31,9 @@ def _configure_qt_runtime():
 
 _configure_qt_runtime()
 
-
+QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_ShareOpenGLContexts, True)
+if sys.platform != "win32":
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
 
 def _configure_ui_fonts(app):
     font_db = QtGui.QFontDatabase()

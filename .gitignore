@@ -6,3 +6,4 @@ venv
 *.spec
 *.exe
 build.cmd
+RECORD.md

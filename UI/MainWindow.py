@@ -36,7 +36,17 @@ class MainWindow_Ui(QtCore.QObject):
 
     @QtCore.pyqtSlot()
     def refresh_login_status(self):
+        # 配置页登录后可能只写了磁盘，这里先同步一次内存配置
+        try:
+            with open(get_config_path(), "r", encoding="utf-8") as f:
+                disk_cfg = json.load(f)
+            if isinstance(disk_cfg, dict):
+                self.config.update(disk_cfg)
+        except Exception:
+            pass
+
         sessionid = self.config.get("sessionid", "")
+        sid = self.config.get("sid", "")
 
         if sessionid:
             self.update_status_signal.emit("已登录")
@@ -45,9 +55,23 @@ class MainWindow_Ui(QtCore.QObject):
                 args=(sessionid,),
                 daemon=True
             ).start()
+        elif sid:
+            self.update_status_signal.emit("手机端已登录")
+            self.qrHint.setText("手机端凭证已就绪，监听仍需电脑端扫码")
+            self.qrHint.setStyleSheet(f"font: 9pt '{get_ui_font_family()}'; color: #d46b08;")
+            self._badge_success()
         else:
             self.update_status_signal.emit("未登录")
-            self._user_panel_signal.emit("未登录", "---", "---", QtGui.QPixmap())
+            self.avatarLabel.clear()
+            self.avatarLabel.setStyleSheet(
+                "border: 1px solid #e0e0e0; border-radius: 8px; background: #fafafa;"
+            )
+            self.qrHint.setText("微信扫码登录")
+            self.qrHint.setStyleSheet(f"font: 9pt '{get_ui_font_family()}'; color: #888;")
+            self._badge_waiting()
+            self.nameLabel.setText("—")
+            self.schoolVal.setText("—")
+            self.snoVal.setText("—")
 
     def setupUi(self, MainWindow):
         ui_font_family = get_ui_font_family()
@@ -421,25 +445,31 @@ class MainWindow_Ui(QtCore.QObject):
 
             elif op == "loginsuccess":
                 web_login_url = "https://www.yuketang.cn/pc/web_login"
-                login_data = json.dumps({
+                login_data = {
                     "UserID": data["UserID"],
                     "Auth":   data["Auth"]
-                })
+                }
                 headers = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
-                                  "rv:104.0) Gecko/20100101 Firefox/104.0"
+                                  "rv:104.0) Gecko/20100101 Firefox/104.0",
+                    "Content-Type": "application/json",
                 }
                 try:
+                    # 扫码成功后立刻停止二维码刷新，避免覆盖登录状态
+                    self._ws_flush_on = False
                     r = requests.post(
-                        web_login_url, data=login_data, headers=headers,
-                        proxies={"http": None, "https": None}
+                        web_login_url, json=login_data, headers=headers,
+                        proxies={"http": None, "https": None}, timeout=10
                     )
-                    sessionid = dict(r.cookies)["sessionid"]
+                    cookie_map = requests.utils.dict_from_cookiejar(r.cookies)
+                    sessionid = cookie_map.get("sessionid") or r.cookies.get("sessionid")
+                    if not sessionid:
+                        raise KeyError("sessionid")
                     self.config["sessionid"] = sessionid
                     # 保存 config
                     config_path = get_config_path()
-                    with open(config_path, "w+") as f:
-                        json.dump(self.config, f)
+                    with open(config_path, "w", encoding="utf-8") as f:
+                        json.dump(self.config, f, ensure_ascii=False)
                     # 标记为扫码登录，_on_user_info_ready 里会打消息
                     self._login_from_scan = True
                     threading.Thread(

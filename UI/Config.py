@@ -693,29 +693,46 @@ f"font: 9pt \"{ui_font_family}\";")
             from Scripts.Utils import verify_mobile_sms_code, get_config_path
             from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
 
-            success, msg, sid = verify_mobile_sms_code(phone, code)
+            success, msg, sid, sessionid = verify_mobile_sms_code(phone, code)
 
-            if success and sid:
+            if success and (sid or sessionid):
                 config_path = get_config_path()
                 try:
-                    with open(config_path, "r", encoding='utf-8') as f:
+                    with open(config_path, "r", encoding="utf-8") as f:
                         cfg = json.load(f)
 
                     cfg["checkin_mode"] = "mobile"
-                    # 直接覆盖顶层字段即可，不再用 mobile_config 占位符
-                    cfg["sid"] = sid
                     cfg["mobile_phone"] = phone
+                    if sid:
+                        cfg["sid"] = sid
+                    if sessionid:
+                        cfg["sessionid"] = sessionid
 
-                    with open(config_path, "w", encoding='utf-8') as f:
+                    with open(config_path, "w", encoding="utf-8") as f:
                         json.dump(cfg, f, indent=4, ensure_ascii=False)
 
-                    if hasattr(self, "main_win"):
+                    # 同步内存配置，否则主窗口仍读旧 sessionid/sid
+                    if hasattr(self, "main_win") and getattr(self.main_win, "config", None) is not None:
+                        self.main_win.config["checkin_mode"] = "mobile"
+                        self.main_win.config["mobile_phone"] = phone
+                        if sid:
+                            self.main_win.config["sid"] = sid
+                        if sessionid:
+                            self.main_win.config["sessionid"] = sessionid
                         QMetaObject.invokeMethod(self.main_win, "refresh_login_status", Qt.QueuedConnection)
 
-                    msg = "登录成功"
+                    if sid and sessionid:
+                        msg = "登录成功（手机端+电脑端凭证已保存）"
+                    elif sid:
+                        msg = "登录成功（手机端凭证已保存；监听仍需电脑端扫码）"
+                    else:
+                        msg = "登录成功（电脑端凭证已保存）"
                 except Exception as e:
                     success = False
                     msg = f"保存配置失败: {e}"
+            elif success:
+                success = False
+                msg = "登录成功但未拿到凭证，请重试"
 
             color = "#07c160" if success else "#f00"
             QMetaObject.invokeMethod(self.mobile_login_status, "setText", Qt.QueuedConnection, Q_ARG(str, msg))

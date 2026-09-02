@@ -201,15 +201,30 @@ def resource_path(relative_path):
 
 def verify_mobile_sms_code(phone: str, code: str):
     url = "https://www.yuketang.cn/api/v3/user/login/app"
-    headers = {"xtbz": "ykt"}
+    headers = {
+        "xtbz": "ykt",
+        "x-client": "app",
+        "User-Agent": "Mozilla/5.0",
+        "Content-Type": "application/json",
+    }
     data = {"type": 3, "phoneNumber": phone, "code": code}
     try:
         r = requests.post(url, headers=headers, json=data, timeout=10)
-        res = r.json()
-        if res.get("code") == 0:
-            sid = r.cookies.get("sid")
-            return True, "登录成功", sid
-        else:
-            return False, res.get("msg", "验证码错误"), ""
+        res = r.json() if r.text else {}
+        if res.get("code") != 0:
+            return False, res.get("msg", "验证码错误"), "", ""
+
+        cookie_map = requests.utils.dict_from_cookiejar(r.cookies)
+        sid = cookie_map.get("sid") or r.cookies.get("sid") or ""
+        sessionid = cookie_map.get("sessionid") or r.cookies.get("sessionid") or ""
+        data_obj = res.get("data") if isinstance(res.get("data"), dict) else {}
+        if not sid:
+            sid = str(data_obj.get("sid") or data_obj.get("sessionId") or "")
+        if not sessionid:
+            sessionid = str(data_obj.get("sessionid") or data_obj.get("sessionId") or "")
+
+        if not sid and not sessionid:
+            return False, "登录成功但未拿到凭证，请重试", "", ""
+        return True, "登录成功", sid, sessionid
     except Exception as e:
-        return False, f"网络错误: {str(e)}", ""
+        return False, f"网络错误: {str(e)}", "", ""
